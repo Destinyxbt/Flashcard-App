@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flashcards</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Lora:ital,wght@0,500;1,400&display=swap" rel="stylesheet"/>
+  <style>
+    /* ── Reset & base ───────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #f7f7f5;      /* warm off-white page */
+      --surface:  #ffffff;      /* card surface */
+      --border:   #e4e4e0;      /* subtle dividers */
+      --ink:      #1a1a18;      /* primary text */
+      --muted:    #888884;      /* secondary text */
+      --accent:   #2563eb;      /* blue — only used for key actions */
+      --accent-bg:#eff4ff;      /* light blue tint */
+      --danger:   #dc2626;
+      --radius:   12px;
+      --shadow:   0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
+    }
+
+    body {
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    /* ── Layout ─────────────────────────────────── */
+    .app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* Left sidebar — topic list */
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 24px 20px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* App name */
+    .app-name {
+      font-family: 'Lora', serif;
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      margin-bottom: 14px;
+    }
+
+    /* New topic input row */
+    .new-topic-row {
+      display: flex;
+      gap: 8px;
+    }
+    .new-topic-row input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: var(--ink);
+      background: var(--bg);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .new-topic-row input:focus { border-color: var(--accent); }
+    .new-topic-row input::placeholder { color: var(--muted); }
+
+    /* Small icon button */
+    .btn-icon {
+      width: 34px; height: 34px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-icon:hover { opacity: 0.85; }
+
+    /* Topic list */
+    .topic-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 10px;
+    }
+
+    .topic-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--ink);
+      transition: background 0.1s;
+      gap: 8px;
+    }
+    .topic-item:hover { background: var(--bg); }
+    /* Active/selected topic */
+    .topic-item.active {
+      background: var(--accent-bg);
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .topic-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Card count badge */
+    .topic-count {
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--border);
+      border-radius: 20px;
+      padding: 1px 7px;
+      flex-shrink: 0;
+    }
+    .topic-item.active .topic-count { background: #d1e0ff; color: var(--accent); }
+
+    /* Delete topic button — only visible on hover */
+    .topic-delete {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 14px;
+      opacity: 0;
+      padding: 0 2px;
+      transition: opacity 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+    .topic-item:hover .topic-delete { opacity: 1; }
+    .topic-delete:hover { color: var(--danger); }
+
+    /* ── Main content area ───────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top bar */
+    .topbar {
+      padding: 20px 32px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+    }
+
+    .topic-title {
+      font-family: 'Lora', serif;
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+    .topic-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* Study mode button */
+    .btn-study {
+      padding: 8px 18px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-study:hover { opacity: 0.85; }
+    .btn-study:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── Card grid ───────────────────────────────── */
+    .cards-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 32px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 10px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .empty-icon { font-size: 40px; opacity: 0.4; }
+    .empty-state h3 { font-size: 15px; font-weight: 500; color: var(--ink); }
+    .empty-state p { font-size: 13px; max-width: 240px; line-height: 1.6; }
+
+    /* No topic selected state */
+    .no-topic {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 10px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .no-topic-icon { font-size: 48px; opacity: 0.25; }
+    .no-topic p { font-size: 14px; }
+
+    /* Add card form */
+    .add-card-form {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+    .add-card-form h4 {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+    .form-row textarea {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: var(--ink);
+      background: var(--bg);
+      resize: vertical;
+      min-height: 72px;
+      outline: none;
+      transition: border-color 0.15s;
+      line-height: 1.5;
+    }
+    .form-row textarea:focus { border-color: var(--accent); }
+    .form-row textarea::placeholder { color: var(--muted); }
+
+    .form-labels {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+    .form-labels span {
+      flex: 1;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+
+    .btn-add-card {
+      padding: 9px 20px;
+      background: var(--ink);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-add-card:hover { opacity: 0.8; }
+
+    /* Card grid layout */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    /* Individual flashcard — flip on click */
+    .card-wrap { perspective: 1000px; height: 160px; cursor: pointer; }
+    .card-inner {
+      position: relative;
+      width: 100%; height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    /* When flipped class is added, rotate to show back */
+    .card-wrap.flipped .card-inner { transform: rotateY(180deg); }
+
+    .card-face {
+      position: absolute;
+      inset: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    /* Back face is rotated 180deg so it appears when card flips */
+    .card-back {
+      transform: rotateY(180deg);
+      background: var(--accent-bg);
+      border-color: #c7d9ff;
+    }
+
+    .card-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .card-back .card-label { color: var(--accent); }
+
+    .card-text {
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--ink);
+      flex: 1;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+    }
+
+    /* Card footer with delete button */
+    .card-footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 10px;
+    }
+    .btn-delete-card {
+      background: none;
+      border: none;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .btn-delete-card:hover { color: var(--danger); background: #fef2f2; }
+
+    /* Flip hint */
+    .card-hint {
+      font-size: 10px;
+      color: var(--muted);
+      opacity: 0.6;
+      margin-top: auto;
+    }
+
+    /* ── Study mode overlay ──────────────────────── */
+    .study-overlay {
+      display: none; /* hidden by default */
+      position: fixed;
+      inset: 0;
+      background: rgba(247, 247, 245, 0.96);
+      backdrop-filter: blur(6px);
+      z-index: 100;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      padding: 40px;
+    }
+    .study-overlay.open { display: flex; }
+
+    .study-progress {
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    /* Big study card */
+    .study-card-wrap { perspective: 1200px; width: min(500px, 90vw); height: 300px; cursor: pointer; }
+    .study-card-inner {
+      position: relative;
+      width: 100%; height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .study-card-wrap.flipped .study-card-inner { transform: rotateY(180deg); }
+
+    .study-face {
+      position: absolute;
+      inset: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.1);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      text-align: center;
+    }
+    .study-back-face {
+      transform: rotateY(180deg);
+      background: var(--accent-bg);
+      border-color: #c7d9ff;
+    }
+
+    .study-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+    .study-back-face .study-label { color: var(--accent); }
+
+    .study-text {
+      font-family: 'Lora', serif;
+      font-size: 20px;
+      line-height: 1.5;
+      color: var(--ink);
+    }
+
+    .study-hint { font-size: 12px; color: var(--muted); margin-top: 20px; }
+
+    /* Study nav buttons */
+    .study-nav { display: flex; gap: 12px; align-items: center; }
+    .btn-nav {
+      padding: 10px 24px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-nav:hover { background: var(--bg); }
+    .btn-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-close-study {
+      padding: 10px 24px;
+      background: var(--ink);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-close-study:hover { opacity: 0.8; }
+
+    /* ── Mobile responsive ───────────────────────── */
+    @media (max-width: 600px) {
+      .sidebar { width: 200px; min-width: 200px; }
+      .topbar, .cards-area { padding-left: 20px; padding-right: 20px; }
+      .form-row { flex-direction: column; }
+    }
+    @media (max-width: 480px) {
+      .app { flex-direction: column; }
+      .sidebar { width: 100%; min-width: unset; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+      .topic-list { max-height: 140px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-name">Flashcards</div>
+      <!-- New topic input — type name and press + to create -->
+      <div class="new-topic-row">
+        <input type="text" id="newTopicInput" placeholder="New topic..." maxlength="40"/>
+        <button class="btn-icon" onclick="addTopic()" title="Add topic">+</button>
+      </div>
+    </div>
+    <!-- Topic list rendered by JS -->
+    <div class="topic-list" id="topicList"></div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main">
+
+    <!-- Top bar — changes based on selected topic -->
+    <div class="topbar" id="topbar">
+      <div>
+        <div class="topic-title" id="topicTitle">Select a topic</div>
+        <div class="topic-subtitle" id="topicSubtitle">Pick a topic from the sidebar to get started</div>
+      </div>
+      <button class="btn-study" id="studyBtn" onclick="openStudy()" disabled>Study</button>
+    </div>
+
+    <!-- Scrollable cards area -->
+    <div class="cards-area" id="cardsArea">
+      <!-- Default: no topic selected -->
+      <div class="no-topic" id="noTopicState">
+        <div class="no-topic-icon">📂</div>
+        <p>Create a topic on the left to start adding flashcards</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Study Mode Overlay ── -->
+<div class="study-overlay" id="studyOverlay">
+  <div class="study-progress" id="studyProgress">Card 1 of 5</div>
+
+  <div class="study-card-wrap" id="studyCardWrap" onclick="flipStudyCard()">
+    <div class="study-card-inner" id="studyCardInner">
+      <div class="study-face">
+        <div class="study-label">Question</div>
+        <div class="study-text" id="studyFrontText"></div>
+        <div class="study-hint">Click to reveal answer</div>
+      </div>
+      <div class="study-face study-back-face">
+        <div class="study-label">Answer</div>
+        <div class="study-text" id="studyBackText"></div>
+        <div class="study-hint">Click to flip back</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="study-nav">
+    <button class="btn-nav" id="prevBtn" onclick="prevCard()">← Prev</button>
+    <button class="btn-nav" id="nextBtn" onclick="nextCard()">Next →</button>
+    <button class="btn-close-study" onclick="closeStudy()">Done</button>
+  </div>
+</div>
+
+<script>
+  // ── Storage helpers ─────────────────────────────
+  // These two functions are the ONLY place we touch localStorage.
+  // Later, to switch to cloud, you replace just these two functions.
+
+  function saveData(data) {
+    // Convert JS object → JSON string and save to browser storage
+    localStorage.setItem('flashcard_app', JSON.stringify(data));
+  }
+
+  function loadData() {
+    // Load JSON string from browser storage and convert back to JS object
+    const raw = localStorage.getItem('flashcard_app');
+    // If nothing saved yet, return a default empty structure
+    return raw ? JSON.parse(raw) : { topics: [] };
+  }
+
+  // ── App state ───────────────────────────────────
+  let data = loadData();         // all topics and cards loaded from storage
+  let activeTopic = null;        // which topic is currently selected
+  let studyIndex = 0;            // which card we're on in study mode
+
+  // ── Topic functions ─────────────────────────────
+
+  function addTopic() {
+    const input = document.getElementById('newTopicInput');
+    const name = input.value.trim();
+    if (!name) return; // do nothing if input is empty
+
+    // Create a new topic object with a unique ID and empty cards array
+    const topic = { id: Date.now().toString(), name, cards: [] };
+    data.topics.push(topic);
+    saveData(data); // persist to localStorage immediately
+
+    input.value = ''; // clear the input
+    renderTopics();
+    selectTopic(topic.id); // auto-select the new topic
+  }
+
+  function deleteTopic(id, e) {
+    e.stopPropagation(); // prevent topic selection when clicking delete
+    if (!confirm('Delete this topic and all its cards?')) return;
+    data.topics = data.topics.filter(t => t.id !== id);
+    saveData(data);
+    if (activeTopic === id) activeTopic = null;
+    renderTopics();
+    renderCards();
+  }
+
+  function selectTopic(id) {
+    activeTopic = id;
+    renderTopics();  // re-render to update the active highlight
+    renderCards();   // show this topic's cards
+  }
+
+  function renderTopics() {
+    const list = document.getElementById('topicList');
+
+    if (data.topics.length === 0) {
+      // Show helpful empty message if no topics exist yet
+      list.innerHTML = '<div style="padding:16px 12px;font-size:12px;color:var(--muted);line-height:1.6">No topics yet.<br/>Type a name above and press +</div>';
+      return;
+    }
+
+    // Build one list item per topic
+    list.innerHTML = data.topics.map(t => `
+      <div class="topic-item ${t.id === activeTopic ? 'active' : ''}" onclick="selectTopic('${t.id}')">
+        <span class="topic-name">${t.name}</span>
+        <span class="topic-count">${t.cards.length}</span>
+        <button class="topic-delete" onclick="deleteTopic('${t.id}', event)" title="Delete topic">✕</button>
+      </div>
+    `).join('');
+  }
+
+  // ── Card functions ──────────────────────────────
+
+  function addCard() {
+    const front = document.getElementById('frontInput').value.trim();
+    const back  = document.getElementById('backInput').value.trim();
+    if (!front || !back) return; // both sides required
+
+    // Find the active topic and push a new card into it
+    const topic = data.topics.find(t => t.id === activeTopic);
+    topic.cards.push({ id: Date.now().toString(), front, back });
+    saveData(data);
+
+    // Clear the inputs
+    document.getElementById('frontInput').value = '';
+    document.getElementById('backInput').value = '';
+
+    renderTopics(); // update card count badge in sidebar
+    renderCards();  // refresh the grid
+  }
+
+  function deleteCard(topicId, cardId, e) {
+    e.stopPropagation(); // prevent card flip when clicking delete
+    const topic = data.topics.find(t => t.id === topicId);
+    topic.cards = topic.cards.filter(c => c.id !== cardId);
+    saveData(data);
+    renderTopics();
+    renderCards();
+  }
+
+  function flipCard(cardId) {
+    // Toggle the "flipped" class to trigger the CSS 3D rotation
+    document.getElementById('card-' + cardId).classList.toggle('flipped');
+  }
+
+  function renderCards() {
+    const area  = document.getElementById('cardsArea');
+    const title = document.getElementById('topicTitle');
+    const sub   = document.getElementById('topicSubtitle');
+    const btn   = document.getElementById('studyBtn');
+
+    // No topic selected — show default state
+    if (!activeTopic) {
+      title.textContent = 'Select a topic';
+      sub.textContent   = 'Pick a topic from the sidebar to get started';
+      btn.disabled      = true;
+      area.innerHTML    = `<div class="no-topic"><div class="no-topic-icon">📂</div><p>Create a topic on the left to start adding flashcards</p></div>`;
+      return;
+    }
+
+    const topic = data.topics.find(t => t.id === activeTopic);
+    title.textContent = topic.name;
+    sub.textContent   = `${topic.cards.length} card${topic.cards.length !== 1 ? 's' : ''}`;
+    btn.disabled      = topic.cards.length === 0;
+
+    // Build the add-card form + card grid
+    area.innerHTML = `
+      <!-- Add card form -->
+      <div class="add-card-form">
+        <h4>Add a card</h4>
+        <div class="form-labels">
+          <span>Front (question)</span>
+          <span>Back (answer)</span>
+        </div>
+        <div class="form-row">
+          <textarea id="frontInput" placeholder="Type your question or term..."></textarea>
+          <textarea id="backInput"  placeholder="Type the answer or definition..."></textarea>
+        </div>
+        <button class="btn-add-card" onclick="addCard()">Add card</button>
+      </div>
+
+      <!-- Card grid or empty state -->
+      ${topic.cards.length === 0
+        ? `<div class="empty-state">
+             <div class="empty-icon">🃏</div>
+             <h3>No cards yet</h3>
+             <p>Use the form above to add your first card to <strong>${topic.name}</strong></p>
+           </div>`
+        : `<div class="cards-grid">
+             ${topic.cards.map(c => `
+               <div class="card-wrap" id="card-${c.id}" onclick="flipCard('${c.id}')">
+                 <div class="card-inner">
+                   <div class="card-face">
+                     <div class="card-label">Question</div>
+                     <div class="card-text">${c.front}</div>
+                     <div class="card-hint">Click to flip</div>
+                   </div>
+                   <div class="card-face card-back">
+                     <div class="card-label">Answer</div>
+                     <div class="card-text">${c.back}</div>
+                     <div class="card-footer">
+                       <button class="btn-delete-card" onclick="deleteCard('${activeTopic}','${c.id}',event)">Delete</button>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+             `).join('')}
+           </div>`
+      }
+    `;
+  }
+
+  // ── Study mode ──────────────────────────────────
+
+  function openStudy() {
+    const topic = data.topics.find(t => t.id === activeTopic);
+    if (!topic || topic.cards.length === 0) return;
+    studyIndex = 0;
+    renderStudyCard();
+    document.getElementById('studyOverlay').classList.add('open');
+  }
+
+  function closeStudy() {
+    document.getElementById('studyOverlay').classList.remove('open');
+  }
+
+  function renderStudyCard() {
+    const topic = data.topics.find(t => t.id === activeTopic);
+    const card  = topic.cards[studyIndex];
+
+    // Update progress label
+    document.getElementById('studyProgress').textContent = `Card ${studyIndex + 1} of ${topic.cards.length}`;
+
+    // Set card text
+    document.getElementById('studyFrontText').textContent = card.front;
+    document.getElementById('studyBackText').textContent  = card.back;
+
+    // Reset flip so every new card starts showing the front
+    document.getElementById('studyCardWrap').classList.remove('flipped');
+
+    // Disable prev/next buttons at the edges
+    document.getElementById('prevBtn').disabled = studyIndex === 0;
+    document.getElementById('nextBtn').disabled = studyIndex === topic.cards.length - 1;
+  }
+
+  function flipStudyCard() {
+    document.getElementById('studyCardWrap').classList.toggle('flipped');
+  }
+
+  function prevCard() { if (studyIndex > 0) { studyIndex--; renderStudyCard(); } }
+  function nextCard() {
+    const topic = data.topics.find(t => t.id === activeTopic);
+    if (studyIndex < topic.cards.length - 1) { studyIndex++; renderStudyCard(); }
+  }
+
+  // ── Keyboard shortcuts ──────────────────────────
+  document.addEventListener('keydown', e => {
+    const overlay = document.getElementById('studyOverlay');
+    if (!overlay.classList.contains('open')) return;
+
+    if (e.key === 'ArrowRight') nextCard();       // next card
+    if (e.key === 'ArrowLeft')  prevCard();       // prev card
+    if (e.key === ' ') { e.preventDefault(); flipStudyCard(); } // spacebar to flip
+    if (e.key === 'Escape') closeStudy();         // close study mode
+  });
+
+  // Allow pressing Enter in the new topic input to add a topic
+  document.getElementById('newTopicInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addTopic();
+  });
+
+  // ── Init ─────────────────────────────────────────
+  renderTopics(); // draw the sidebar on page load
+  renderCards();  // draw the main area on page load
+</script>
+</body>
+</html>
