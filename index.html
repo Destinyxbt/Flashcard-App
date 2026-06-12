@@ -202,8 +202,87 @@
     .btn-nav:disabled { opacity:0.3; cursor:not-allowed; }
     .btn-close-study { padding:10px 24px; background:var(--ink); color:#fff; border:none; border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; font-weight:500; cursor:pointer; transition:opacity 0.15s; }
     .btn-close-study:hover { opacity:0.8; }
-    @media(max-width:600px){.sidebar{width:200px;min-width:200px;}.topbar,.cards-area{padding-left:20px;padding-right:20px;}.form-row{flex-direction:column;}}
-    @media(max-width:480px){.app{flex-direction:column;}.sidebar{width:100%;min-width:unset;height:auto;border-right:none;border-bottom:1px solid var(--border);}.topic-list{max-height:140px;}}
+    @media(max-width:600px){.topbar,.cards-area{padding-left:16px;padding-right:16px;}}
+
+    /* ── Mobile: sidebar becomes a slide-in drawer ── */
+    @media(max-width:700px){
+      /* Hide the desktop sidebar */
+      .sidebar { display:none; }
+
+      /* Show a mobile top nav bar instead */
+      .mobile-nav {
+        display:flex; align-items:center; justify-content:space-between;
+        padding:12px 16px; background:var(--surface);
+        border-bottom:1px solid var(--border);
+        position:sticky; top:0; z-index:10;
+      }
+      .mobile-nav-left { display:flex; align-items:center; gap:10px; }
+      .mobile-logo { font-family:'Lora',serif; font-size:16px; font-weight:500; }
+      .mobile-topic-label {
+        font-size:13px; color:var(--muted);
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        max-width:140px;
+      }
+      .btn-hamburger {
+        width:36px; height:36px; border:none; background:var(--bg);
+        border-radius:8px; cursor:pointer; display:flex; flex-direction:column;
+        align-items:center; justify-content:center; gap:5px;
+        transition:background 0.15s;
+      }
+      .btn-hamburger:hover { background:var(--border); }
+      .btn-hamburger span {
+        display:block; width:18px; height:2px;
+        background:var(--ink); border-radius:2px;
+        transition:transform 0.2s, opacity 0.2s;
+      }
+
+      /* Mobile sidebar overlay */
+      .mobile-sidebar-overlay {
+        display:none; position:fixed; inset:0;
+        background:rgba(0,0,0,0.3); z-index:300;
+        backdrop-filter:blur(2px);
+      }
+      .mobile-sidebar-overlay.open { display:block; }
+
+      /* Mobile sidebar panel slides in from left */
+      .mobile-sidebar {
+        position:fixed; top:0; left:0; bottom:0;
+        width:min(300px, 85vw);
+        background:var(--surface);
+        border-right:1px solid var(--border);
+        box-shadow:8px 0 40px rgba(0,0,0,0.12);
+        z-index:301;
+        display:flex; flex-direction:column;
+        transform:translateX(-100%);
+        transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
+      }
+      .mobile-sidebar.open { transform:translateX(0); }
+
+      .mobile-sidebar-header {
+        padding:20px 16px 14px;
+        border-bottom:1px solid var(--border);
+        display:flex; flex-direction:column; gap:14px;
+      }
+      .mobile-sidebar-top {
+        display:flex; align-items:center; justify-content:space-between;
+      }
+      .mobile-sidebar-title { font-family:'Lora',serif; font-size:17px; font-weight:500; }
+      .btn-close-sidebar {
+        width:30px; height:30px; border:none; background:var(--bg);
+        border-radius:8px; font-size:16px; color:var(--muted); cursor:pointer;
+        display:flex; align-items:center; justify-content:center;
+      }
+      .mobile-user-row {
+        display:flex; align-items:center; justify-content:space-between;
+      }
+      .mobile-user-name { font-size:13px; font-weight:500; color:var(--ink); }
+
+      /* Make the main area full width on mobile */
+      .main { width:100%; }
+    }
+
+    /* Hide mobile nav on desktop */
+    @media(min-width:701px){ .mobile-nav,.mobile-sidebar-overlay,.mobile-sidebar{ display:none!important; } }
   </style>
 </head>
 <body>
@@ -233,6 +312,40 @@
     <button class="auth-btn" id="authBtn" onclick="handleAuth()">Log in</button>
     <div class="auth-msg" id="authMsg"></div>
   </div>
+</div>
+
+<!-- MOBILE TOP NAV — only visible on small screens -->
+<nav class="mobile-nav" id="mobileNav" style="display:none">
+  <div class="mobile-nav-left">
+    <button class="btn-hamburger" onclick="openMobileSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <div>
+      <div class="mobile-logo">Flashcards</div>
+      <div class="mobile-topic-label" id="mobileTopicLabel">No topic selected</div>
+    </div>
+  </div>
+  <button class="btn-study" id="studyBtnMobile" onclick="openStudy()" disabled>Study</button>
+</nav>
+
+<!-- MOBILE SIDEBAR OVERLAY + PANEL -->
+<div class="mobile-sidebar-overlay" id="mobileSidebarOverlay" onclick="closeMobileSidebar()"></div>
+<div class="mobile-sidebar" id="mobileSidebar">
+  <div class="mobile-sidebar-header">
+    <div class="mobile-sidebar-top">
+      <div class="mobile-sidebar-title">Flashcards</div>
+      <button class="btn-close-sidebar" onclick="closeMobileSidebar()">✕</button>
+    </div>
+    <div class="mobile-user-row">
+      <span class="mobile-user-name" id="mobileUserDisplay"></span>
+      <button class="btn-logout" onclick="logout()">Log out</button>
+    </div>
+    <div class="new-topic-row">
+      <input type="text" id="newTopicInputMobile" placeholder="New topic..." maxlength="40"/>
+      <button class="btn-icon" onclick="addTopicMobile()">+</button>
+    </div>
+  </div>
+  <div class="topic-list" id="topicListMobile"></div>
 </div>
 
 <!-- MAIN APP — visible when logged in -->
@@ -395,19 +508,55 @@
     document.getElementById('authScreen').style.display = 'none';
     document.getElementById('appScreen').classList.add('visible');
     document.getElementById('userDisplay').textContent = username;
+    document.getElementById('mobileUserDisplay').textContent = username;
+    handleResize(); // show mobile nav if on small screen
     loadTopics();
   }
 
   async function logout() {
-    await db.auth.signOut(); // ends the Supabase session
+    await db.auth.signOut();
     currentUser = null; topics = []; activeTopic = null; activeCards = [];
     document.getElementById('appScreen').classList.remove('visible');
     document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('mobileNav').style.display = 'none';
+    closeMobileSidebar();
     document.getElementById('authUsername').value = '';
     document.getElementById('authPassword').value = '';
     document.getElementById('authConfirm').value  = '';
     showAuthMsg('', '');
   }
+
+  // ── Mobile sidebar ───────────────────────────────
+  function openMobileSidebar() {
+    document.getElementById('mobileSidebar').classList.add('open');
+    document.getElementById('mobileSidebarOverlay').classList.add('open');
+  }
+  function closeMobileSidebar() {
+    document.getElementById('mobileSidebar').classList.remove('open');
+    document.getElementById('mobileSidebarOverlay').classList.remove('open');
+  }
+
+  // Mobile has its own topic input — wire it up
+  function addTopicMobile() {
+    const input = document.getElementById('newTopicInputMobile');
+    // Temporarily swap the desktop input value, reuse addTopic(), then restore
+    const desktop = document.getElementById('newTopicInput');
+    desktop.value = input.value;
+    input.value = '';
+    addTopic();
+  }
+
+  document.getElementById('newTopicInputMobile').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addTopicMobile();
+  });
+
+  // Show/hide mobile nav based on screen size
+  function handleResize() {
+    const isMobile = window.innerWidth <= 700;
+    document.getElementById('mobileNav').style.display =
+      isMobile && currentUser ? 'flex' : 'none';
+  }
+  window.addEventListener('resize', handleResize);
 
   // ── Drawer (add card panel) ──────────────────────
   function openDrawer() {
@@ -460,23 +609,23 @@
 
   function selectTopic(id) {
     activeTopic = id;
+    closeMobileSidebar(); // close the drawer after picking a topic on mobile
     renderTopics();
     loadCards(id);
   }
 
   function renderTopics() {
-    const list = document.getElementById('topicList');
-    if (topics.length === 0) {
-      list.innerHTML = '<div style="padding:16px 12px;font-size:12px;color:var(--muted);line-height:1.6">No topics yet.<br/>Type a name above and press +</div>';
-      return;
-    }
-    list.innerHTML = topics.map(t => `
-      <div class="topic-item ${t.id === activeTopic ? 'active' : ''}" onclick="selectTopic('${t.id}')">
-        <span class="topic-name">${t.name}</span>
-        <span class="topic-count" id="count-${t.id}">—</span>
-        <button class="topic-delete" onclick="deleteTopic('${t.id}',event)">✕</button>
-      </div>
-    `).join('');
+    const html = topics.length === 0
+      ? '<div style="padding:16px 12px;font-size:12px;color:var(--muted);line-height:1.6">No topics yet.<br/>Type a name above and press +</div>'
+      : topics.map(t => `
+          <div class="topic-item ${t.id === activeTopic ? 'active' : ''}" onclick="selectTopic('${t.id}')">
+            <span class="topic-name">${t.name}</span>
+            <span class="topic-count" id="count-${t.id}">—</span>
+            <button class="topic-delete" onclick="deleteTopic('${t.id}',event)">✕</button>
+          </div>`).join('');
+    // Sync both desktop and mobile topic lists
+    document.getElementById('topicList').innerHTML = html;
+    document.getElementById('topicListMobile').innerHTML = html;
   }
 
   // ── Cards ────────────────────────────────────────
@@ -539,7 +688,11 @@
       title.textContent = 'Select a topic';
       subtitle.textContent = 'Pick a topic from the sidebar';
       btn.disabled = true;
-      area.innerHTML = `<div class="no-topic"><div class="no-topic-icon">📂</div><p>Create a topic on the left to start adding flashcards</p></div>`;
+      // Sync mobile
+      document.getElementById('mobileTopicLabel').textContent = 'No topic selected';
+      const mbtn = document.getElementById('studyBtnMobile');
+      if (mbtn) mbtn.disabled = true;
+      area.innerHTML = `<div class="no-topic"><div class="no-topic-icon">📂</div><p>Tap the menu icon above to pick a topic</p></div>`;
       return;
     }
 
@@ -547,6 +700,10 @@
     title.textContent    = topic.name;
     subtitle.textContent = `${activeCards.length} card${activeCards.length !== 1 ? 's' : ''}`;
     btn.disabled = activeCards.length === 0;
+    // Sync mobile top bar
+    document.getElementById('mobileTopicLabel').textContent = topic.name;
+    const mbtn = document.getElementById('studyBtnMobile');
+    if (mbtn) mbtn.disabled = activeCards.length === 0;
 
     area.innerHTML = `
       <button class="btn-open-drawer" onclick="openDrawer()">
