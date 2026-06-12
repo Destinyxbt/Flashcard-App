@@ -5,542 +5,188 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Flashcards</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Lora:ital,wght@0,500;1,400&display=swap" rel="stylesheet"/>
+  <!-- Supabase JS library — gives us auth + database in one package -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    /* ── Reset & base ───────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:       #f7f7f5;      /* warm off-white page */
-      --surface:  #ffffff;      /* card surface */
-      --border:   #e4e4e0;      /* subtle dividers */
-      --ink:      #1a1a18;      /* primary text */
-      --muted:    #888884;      /* secondary text */
-      --accent:   #2563eb;      /* blue — only used for key actions */
-      --accent-bg:#eff4ff;      /* light blue tint */
-      --danger:   #dc2626;
-      --radius:   12px;
-      --shadow:   0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
+      --bg:#f7f7f5; --surface:#ffffff; --border:#e4e4e0; --ink:#1a1a18;
+      --muted:#888884; --accent:#2563eb; --accent-bg:#eff4ff; --danger:#dc2626;
+      --radius:12px; --shadow:0 1px 4px rgba(0,0,0,0.07),0 4px 16px rgba(0,0,0,0.05);
     }
+    body { background:var(--bg); font-family:'Inter',sans-serif; color:var(--ink); min-height:100vh; }
 
-    body {
-      background: var(--bg);
-      font-family: 'Inter', sans-serif;
-      color: var(--ink);
-      min-height: 100vh;
-    }
+    /* AUTH SCREEN */
+    .auth-screen { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .auth-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px 36px; width:min(400px,100%); box-shadow:var(--shadow); }
+    .auth-logo { font-family:'Lora',serif; font-size:22px; font-weight:500; margin-bottom:6px; }
+    .auth-tagline { font-size:13px; color:var(--muted); margin-bottom:32px; }
+    .auth-tabs { display:flex; margin-bottom:28px; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+    .auth-tab { flex:1; padding:9px; background:none; border:none; font-family:'Inter',sans-serif; font-size:13px; font-weight:500; color:var(--muted); cursor:pointer; transition:background 0.15s,color 0.15s; }
+    .auth-tab.active { background:var(--ink); color:#fff; }
+    .auth-field { margin-bottom:16px; }
+    .auth-field label { display:block; font-size:12px; font-weight:500; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.06em; }
+    .auth-field input { width:100%; padding:11px 14px; border:1px solid var(--border); border-radius:8px; font-family:'Inter',sans-serif; font-size:14px; color:var(--ink); background:var(--bg); outline:none; transition:border-color 0.15s; }
+    .auth-field input:focus { border-color:var(--accent); }
+    .auth-btn { width:100%; padding:12px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-family:'Inter',sans-serif; font-size:14px; font-weight:600; cursor:pointer; margin-top:8px; transition:opacity 0.15s; }
+    .auth-btn:hover { opacity:0.88; }
+    .auth-btn:disabled { opacity:0.5; cursor:not-allowed; }
+    .auth-msg { margin-top:14px; font-size:13px; text-align:center; min-height:18px; }
+    .auth-msg.error { color:var(--danger); }
+    .auth-msg.success { color:#16a34a; }
 
-    /* ── Layout ─────────────────────────────────── */
-    .app { display: flex; height: 100vh; overflow: hidden; }
-
-    /* Left sidebar — topic list */
-    .sidebar {
-      width: 260px;
-      min-width: 260px;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .sidebar-header {
-      padding: 24px 20px 16px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    /* App name */
-    .app-name {
-      font-family: 'Lora', serif;
-      font-size: 18px;
-      font-weight: 500;
-      letter-spacing: -0.01em;
-      margin-bottom: 14px;
-    }
-
-    /* New topic input row */
-    .new-topic-row {
-      display: flex;
-      gap: 8px;
-    }
-    .new-topic-row input {
-      flex: 1;
-      padding: 8px 12px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      color: var(--ink);
-      background: var(--bg);
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    .new-topic-row input:focus { border-color: var(--accent); }
-    .new-topic-row input::placeholder { color: var(--muted); }
-
-    /* Small icon button */
-    .btn-icon {
-      width: 34px; height: 34px;
-      border: none;
-      border-radius: 8px;
-      background: var(--accent);
-      color: #fff;
-      font-size: 18px;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: opacity 0.15s;
-      flex-shrink: 0;
-    }
-    .btn-icon:hover { opacity: 0.85; }
-
-    /* Topic list */
-    .topic-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px 10px;
-    }
-
-    .topic-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 9px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 400;
-      color: var(--ink);
-      transition: background 0.1s;
-      gap: 8px;
-    }
-    .topic-item:hover { background: var(--bg); }
-    /* Active/selected topic */
-    .topic-item.active {
-      background: var(--accent-bg);
-      color: var(--accent);
-      font-weight: 500;
-    }
-
-    .topic-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-    /* Card count badge */
-    .topic-count {
-      font-size: 11px;
-      color: var(--muted);
-      background: var(--border);
-      border-radius: 20px;
-      padding: 1px 7px;
-      flex-shrink: 0;
-    }
-    .topic-item.active .topic-count { background: #d1e0ff; color: var(--accent); }
-
-    /* Delete topic button — only visible on hover */
-    .topic-delete {
-      background: none;
-      border: none;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 14px;
-      opacity: 0;
-      padding: 0 2px;
-      transition: opacity 0.15s, color 0.15s;
-      flex-shrink: 0;
-    }
-    .topic-item:hover .topic-delete { opacity: 1; }
-    .topic-delete:hover { color: var(--danger); }
-
-    /* ── Main content area ───────────────────────── */
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* Top bar */
-    .topbar {
-      padding: 20px 32px 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: var(--surface);
-    }
-
-    .topic-title {
-      font-family: 'Lora', serif;
-      font-size: 22px;
-      font-weight: 500;
-      letter-spacing: -0.02em;
-    }
-    .topic-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
-
-    /* Study mode button */
-    .btn-study {
-      padding: 8px 18px;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    .btn-study:hover { opacity: 0.85; }
-    .btn-study:disabled { opacity: 0.35; cursor: not-allowed; }
-
-    /* ── Card grid ───────────────────────────────── */
-    .cards-area {
-      flex: 1;
-      overflow-y: auto;
-      padding: 28px 32px;
-    }
-
-    /* Empty state */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      gap: 10px;
-      color: var(--muted);
-      text-align: center;
-    }
-    .empty-icon { font-size: 40px; opacity: 0.4; }
-    .empty-state h3 { font-size: 15px; font-weight: 500; color: var(--ink); }
-    .empty-state p { font-size: 13px; max-width: 240px; line-height: 1.6; }
-
-    /* No topic selected state */
-    .no-topic {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      gap: 10px;
-      color: var(--muted);
-      text-align: center;
-    }
-    .no-topic-icon { font-size: 48px; opacity: 0.25; }
-    .no-topic p { font-size: 14px; }
-
-    /* Add card form */
-    .add-card-form {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      margin-bottom: 24px;
-      box-shadow: var(--shadow);
-    }
-    .add-card-form h4 {
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 14px;
-    }
-    .form-row { display: flex; gap: 12px; margin-bottom: 12px; }
-    .form-row textarea {
-      flex: 1;
-      padding: 10px 14px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      color: var(--ink);
-      background: var(--bg);
-      resize: vertical;
-      min-height: 72px;
-      outline: none;
-      transition: border-color 0.15s;
-      line-height: 1.5;
-    }
-    .form-row textarea:focus { border-color: var(--accent); }
-    .form-row textarea::placeholder { color: var(--muted); }
-
-    .form-labels {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 4px;
-    }
-    .form-labels span {
-      flex: 1;
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-    }
-
-    .btn-add-card {
-      padding: 9px 20px;
-      background: var(--ink);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    .btn-add-card:hover { opacity: 0.8; }
-
-    /* Card grid layout */
-    .cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 16px;
-    }
-
-    /* Individual flashcard — flip on click */
-    .card-wrap { perspective: 1000px; height: 160px; cursor: pointer; }
-    .card-inner {
-      position: relative;
-      width: 100%; height: 100%;
-      transform-style: preserve-3d;
-      transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    /* When flipped class is added, rotate to show back */
-    .card-wrap.flipped .card-inner { transform: rotateY(180deg); }
-
-    .card-face {
-      position: absolute;
-      inset: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-      display: flex;
-      flex-direction: column;
-      padding: 18px;
-      overflow: hidden;
-    }
-
-    /* Back face is rotated 180deg so it appears when card flips */
-    .card-back {
-      transform: rotateY(180deg);
-      background: var(--accent-bg);
-      border-color: #c7d9ff;
-    }
-
-    .card-label {
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-    .card-back .card-label { color: var(--accent); }
-
-    .card-text {
-      font-size: 14px;
-      line-height: 1.55;
-      color: var(--ink);
-      flex: 1;
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-line-clamp: 4;
-      -webkit-box-orient: vertical;
-    }
-
-    /* Card footer with delete button */
-    .card-footer {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 10px;
-    }
-    .btn-delete-card {
-      background: none;
-      border: none;
-      font-size: 12px;
-      color: var(--muted);
-      cursor: pointer;
-      padding: 2px 4px;
-      border-radius: 4px;
-      transition: color 0.15s, background 0.15s;
-    }
-    .btn-delete-card:hover { color: var(--danger); background: #fef2f2; }
-
-    /* Flip hint */
-    .card-hint {
-      font-size: 10px;
-      color: var(--muted);
-      opacity: 0.6;
-      margin-top: auto;
-    }
-
-    /* ── Study mode overlay ──────────────────────── */
-    .study-overlay {
-      display: none; /* hidden by default */
-      position: fixed;
-      inset: 0;
-      background: rgba(247, 247, 245, 0.96);
-      backdrop-filter: blur(6px);
-      z-index: 100;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 28px;
-      padding: 40px;
-    }
-    .study-overlay.open { display: flex; }
-
-    .study-progress {
-      font-size: 12px;
-      color: var(--muted);
-      letter-spacing: 0.05em;
-    }
-
-    /* Big study card */
-    .study-card-wrap { perspective: 1200px; width: min(500px, 90vw); height: 300px; cursor: pointer; }
-    .study-card-inner {
-      position: relative;
-      width: 100%; height: 100%;
-      transform-style: preserve-3d;
-      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .study-card-wrap.flipped .study-card-inner { transform: rotateY(180deg); }
-
-    .study-face {
-      position: absolute;
-      inset: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.1);
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px;
-      text-align: center;
-    }
-    .study-back-face {
-      transform: rotateY(180deg);
-      background: var(--accent-bg);
-      border-color: #c7d9ff;
-    }
-
-    .study-label {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 20px;
-    }
-    .study-back-face .study-label { color: var(--accent); }
-
-    .study-text {
-      font-family: 'Lora', serif;
-      font-size: 20px;
-      line-height: 1.5;
-      color: var(--ink);
-    }
-
-    .study-hint { font-size: 12px; color: var(--muted); margin-top: 20px; }
-
-    /* Study nav buttons */
-    .study-nav { display: flex; gap: 12px; align-items: center; }
-    .btn-nav {
-      padding: 10px 24px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      border-radius: 8px;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--ink);
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .btn-nav:hover { background: var(--bg); }
-    .btn-nav:disabled { opacity: 0.3; cursor: not-allowed; }
-    .btn-close-study {
-      padding: 10px 24px;
-      background: var(--ink);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    .btn-close-study:hover { opacity: 0.8; }
-
-    /* ── Mobile responsive ───────────────────────── */
-    @media (max-width: 600px) {
-      .sidebar { width: 200px; min-width: 200px; }
-      .topbar, .cards-area { padding-left: 20px; padding-right: 20px; }
-      .form-row { flex-direction: column; }
-    }
-    @media (max-width: 480px) {
-      .app { flex-direction: column; }
-      .sidebar { width: 100%; min-width: unset; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
-      .topic-list { max-height: 140px; }
-    }
+    /* MAIN APP */
+    .app { display:none; }
+    .app.visible { display:flex; height:100vh; overflow:hidden; }
+    .sidebar { width:260px; min-width:260px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+    .sidebar-header { padding:20px 16px 14px; border-bottom:1px solid var(--border); }
+    .user-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+    .user-name { font-size:13px; font-weight:500; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+    .btn-logout { font-size:11px; color:var(--muted); background:none; border:1px solid var(--border); border-radius:6px; padding:4px 8px; cursor:pointer; transition:color 0.15s,border-color 0.15s; white-space:nowrap; }
+    .btn-logout:hover { color:var(--danger); border-color:var(--danger); }
+    .app-name { font-family:'Lora',serif; font-size:17px; font-weight:500; margin-bottom:12px; }
+    .new-topic-row { display:flex; gap:8px; }
+    .new-topic-row input { flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--bg); outline:none; transition:border-color 0.15s; }
+    .new-topic-row input:focus { border-color:var(--accent); }
+    .new-topic-row input::placeholder { color:var(--muted); }
+    .btn-icon { width:34px; height:34px; border:none; border-radius:8px; background:var(--accent); color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:opacity 0.15s; flex-shrink:0; }
+    .btn-icon:hover { opacity:0.85; }
+    .topic-list { flex:1; overflow-y:auto; padding:10px; }
+    .topic-item { display:flex; align-items:center; justify-content:space-between; padding:9px 12px; border-radius:8px; cursor:pointer; font-size:13px; color:var(--ink); transition:background 0.1s; gap:8px; }
+    .topic-item:hover { background:var(--bg); }
+    .topic-item.active { background:var(--accent-bg); color:var(--accent); font-weight:500; }
+    .topic-name { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .topic-count { font-size:11px; color:var(--muted); background:var(--border); border-radius:20px; padding:1px 7px; flex-shrink:0; }
+    .topic-item.active .topic-count { background:#d1e0ff; color:var(--accent); }
+    .topic-delete { background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; opacity:0; padding:0 2px; border-radius:4px; transition:opacity 0.15s,color 0.15s; flex-shrink:0; }
+    .topic-item:hover .topic-delete { opacity:1; }
+    .topic-delete:hover { color:var(--danger); }
+    .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+    .topbar { padding:20px 32px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:var(--surface); }
+    .topic-title { font-family:'Lora',serif; font-size:22px; font-weight:500; letter-spacing:-0.02em; }
+    .topic-subtitle { font-size:12px; color:var(--muted); margin-top:2px; }
+    .btn-study { padding:8px 18px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; font-weight:500; cursor:pointer; transition:opacity 0.15s; }
+    .btn-study:hover { opacity:0.85; }
+    .btn-study:disabled { opacity:0.35; cursor:not-allowed; }
+    .cards-area { flex:1; overflow-y:auto; padding:28px 32px; }
+    .loading { display:flex; align-items:center; justify-content:center; height:100%; gap:10px; color:var(--muted); font-size:14px; }
+    .empty-state, .no-topic { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:10px; color:var(--muted); text-align:center; }
+    .empty-icon, .no-topic-icon { font-size:40px; opacity:0.4; }
+    .empty-state h3 { font-size:15px; font-weight:500; color:var(--ink); }
+    .empty-state p, .no-topic p { font-size:13px; max-width:240px; line-height:1.6; }
+    .add-card-form { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; margin-bottom:24px; box-shadow:var(--shadow); }
+    .add-card-form h4 { font-size:12px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); margin-bottom:14px; }
+    .form-labels { display:flex; gap:12px; margin-bottom:4px; }
+    .form-labels span { flex:1; font-size:11px; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.07em; }
+    .form-row { display:flex; gap:12px; margin-bottom:12px; }
+    .form-row textarea { flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--bg); resize:vertical; min-height:72px; outline:none; transition:border-color 0.15s; line-height:1.5; }
+    .form-row textarea:focus { border-color:var(--accent); }
+    .form-row textarea::placeholder { color:var(--muted); }
+    .btn-add-card { padding:9px 20px; background:var(--ink); color:#fff; border:none; border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; font-weight:500; cursor:pointer; transition:opacity 0.15s; }
+    .btn-add-card:hover { opacity:0.8; }
+    .btn-add-card:disabled { opacity:0.5; cursor:not-allowed; }
+    .cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
+    .card-wrap { perspective:1000px; height:160px; cursor:pointer; }
+    .card-inner { position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform 0.45s cubic-bezier(0.4,0,0.2,1); }
+    .card-wrap.flipped .card-inner { transform:rotateY(180deg); }
+    .card-face { position:absolute; inset:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); backface-visibility:hidden; -webkit-backface-visibility:hidden; display:flex; flex-direction:column; padding:18px; overflow:hidden; }
+    .card-back { transform:rotateY(180deg); background:var(--accent-bg); border-color:#c7d9ff; }
+    .card-label { font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+    .card-back .card-label { color:var(--accent); }
+    .card-text { font-size:14px; line-height:1.55; color:var(--ink); flex:1; overflow:hidden; display:-webkit-box; -webkit-line-clamp:4; line-clamp:4; -webkit-box-orient:vertical; }
+    .card-footer { display:flex; justify-content:flex-end; margin-top:10px; }
+    .btn-delete-card { background:none; border:none; font-size:12px; color:var(--muted); cursor:pointer; padding:2px 4px; border-radius:4px; transition:color 0.15s,background 0.15s; }
+    .btn-delete-card:hover { color:var(--danger); background:#fef2f2; }
+    .card-hint { font-size:10px; color:var(--muted); opacity:0.6; margin-top:auto; }
+    .study-overlay { display:none; position:fixed; inset:0; background:rgba(247,247,245,0.96); backdrop-filter:blur(6px); z-index:100; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:40px; }
+    .study-overlay.open { display:flex; }
+    .study-progress { font-size:12px; color:var(--muted); letter-spacing:0.05em; }
+    .study-card-wrap { perspective:1200px; width:min(500px,90vw); height:300px; cursor:pointer; }
+    .study-card-inner { position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform 0.5s cubic-bezier(0.4,0,0.2,1); }
+    .study-card-wrap.flipped .study-card-inner { transform:rotateY(180deg); }
+    .study-face { position:absolute; inset:0; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 8px 40px rgba(0,0,0,0.1); backface-visibility:hidden; -webkit-backface-visibility:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px; text-align:center; }
+    .study-back-face { transform:rotateY(180deg); background:var(--accent-bg); border-color:#c7d9ff; }
+    .study-label { font-size:11px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:20px; }
+    .study-back-face .study-label { color:var(--accent); }
+    .study-text { font-family:'Lora',serif; font-size:20px; line-height:1.5; color:var(--ink); }
+    .study-hint { font-size:12px; color:var(--muted); margin-top:20px; }
+    .study-nav { display:flex; gap:12px; align-items:center; }
+    .btn-nav { padding:10px 24px; border:1px solid var(--border); background:var(--surface); border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; font-weight:500; color:var(--ink); cursor:pointer; transition:background 0.15s; }
+    .btn-nav:hover { background:var(--bg); }
+    .btn-nav:disabled { opacity:0.3; cursor:not-allowed; }
+    .btn-close-study { padding:10px 24px; background:var(--ink); color:#fff; border:none; border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; font-weight:500; cursor:pointer; transition:opacity 0.15s; }
+    .btn-close-study:hover { opacity:0.8; }
+    @media(max-width:600px){.sidebar{width:200px;min-width:200px;}.topbar,.cards-area{padding-left:20px;padding-right:20px;}.form-row{flex-direction:column;}}
+    @media(max-width:480px){.app{flex-direction:column;}.sidebar{width:100%;min-width:unset;height:auto;border-right:none;border-bottom:1px solid var(--border);}.topic-list{max-height:140px;}}
   </style>
 </head>
 <body>
 
-<div class="app">
+<!-- AUTH SCREEN — visible when logged out -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">Flashcards</div>
+    <div class="auth-tagline">Your personal study companion</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin"  onclick="switchTab('login')">Log in</button>
+      <button class="auth-tab"        id="tabSignup" onclick="switchTab('signup')">Sign up</button>
+    </div>
+    <div class="auth-field">
+      <label>Username</label>
+      <input type="text" id="authUsername" placeholder="Enter your username" autocomplete="username"/>
+    </div>
+    <div class="auth-field">
+      <label>Password</label>
+      <input type="password" id="authPassword" placeholder="Enter your password" autocomplete="current-password"/>
+    </div>
+    <!-- Only shown on signup tab -->
+    <div class="auth-field" id="confirmField" style="display:none">
+      <label>Confirm Password</label>
+      <input type="password" id="authConfirm" placeholder="Repeat your password" autocomplete="new-password"/>
+    </div>
+    <button class="auth-btn" id="authBtn" onclick="handleAuth()">Log in</button>
+    <div class="auth-msg" id="authMsg"></div>
+  </div>
+</div>
 
-  <!-- ── Sidebar ── -->
+<!-- MAIN APP — visible when logged in -->
+<div class="app" id="appScreen">
   <aside class="sidebar">
     <div class="sidebar-header">
+      <div class="user-row">
+        <span class="user-name" id="userDisplay"></span>
+        <button class="btn-logout" onclick="logout()">Log out</button>
+      </div>
       <div class="app-name">Flashcards</div>
-      <!-- New topic input — type name and press + to create -->
       <div class="new-topic-row">
         <input type="text" id="newTopicInput" placeholder="New topic..." maxlength="40"/>
-        <button class="btn-icon" onclick="addTopic()" title="Add topic">+</button>
+        <button class="btn-icon" onclick="addTopic()">+</button>
       </div>
     </div>
-    <!-- Topic list rendered by JS -->
     <div class="topic-list" id="topicList"></div>
   </aside>
-
-  <!-- ── Main ── -->
   <main class="main">
-
-    <!-- Top bar — changes based on selected topic -->
-    <div class="topbar" id="topbar">
+    <div class="topbar">
       <div>
         <div class="topic-title" id="topicTitle">Select a topic</div>
-        <div class="topic-subtitle" id="topicSubtitle">Pick a topic from the sidebar to get started</div>
+        <div class="topic-subtitle" id="topicSubtitle">Pick a topic from the sidebar</div>
       </div>
       <button class="btn-study" id="studyBtn" onclick="openStudy()" disabled>Study</button>
     </div>
-
-    <!-- Scrollable cards area -->
     <div class="cards-area" id="cardsArea">
-      <!-- Default: no topic selected -->
-      <div class="no-topic" id="noTopicState">
+      <div class="no-topic">
         <div class="no-topic-icon">📂</div>
         <p>Create a topic on the left to start adding flashcards</p>
       </div>
     </div>
-
   </main>
 </div>
 
-<!-- ── Study Mode Overlay ── -->
+<!-- STUDY MODE OVERLAY -->
 <div class="study-overlay" id="studyOverlay">
   <div class="study-progress" id="studyProgress">Card 1 of 5</div>
-
   <div class="study-card-wrap" id="studyCardWrap" onclick="flipStudyCard()">
-    <div class="study-card-inner" id="studyCardInner">
+    <div class="study-card-inner">
       <div class="study-face">
         <div class="study-label">Question</div>
         <div class="study-text" id="studyFrontText"></div>
@@ -553,7 +199,6 @@
       </div>
     </div>
   </div>
-
   <div class="study-nav">
     <button class="btn-nav" id="prevBtn" onclick="prevCard()">← Prev</button>
     <button class="btn-nav" id="nextBtn" onclick="nextCard()">Next →</button>
@@ -562,242 +207,307 @@
 </div>
 
 <script>
-  // ── Storage helpers ─────────────────────────────
-  // These two functions are the ONLY place we touch localStorage.
-  // Later, to switch to cloud, you replace just these two functions.
+  // Connect to Supabase using our project URL and anon key
+  const { createClient } = supabase;
+  const db = createClient(
+    'https://lkinlodutomimidzexhf.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxraW5sb2R1dG9taW1pZHpleGhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDk3MDQsImV4cCI6MjA5Njc4NTcwNH0.llXm-mYEwXEGP20BY9sQOBwygUmH9tjGT6S960bCaCk'
+  );
 
-  function saveData(data) {
-    // Convert JS object → JSON string and save to browser storage
-    localStorage.setItem('flashcard_app', JSON.stringify(data));
+  // App state
+  let currentUser = null;   // logged-in user object
+  let topics      = [];     // topics from Supabase
+  let activeTopic = null;   // selected topic id
+  let activeCards = [];     // cards for selected topic
+  let studyIndex  = 0;      // current card in study mode
+  let currentTab  = 'login';
+
+  // ── Auth ─────────────────────────────────────────
+
+  function switchTab(tab) {
+    currentTab = tab;
+    const isLogin = tab === 'login';
+    document.getElementById('tabLogin').classList.toggle('active', isLogin);
+    document.getElementById('tabSignup').classList.toggle('active', !isLogin);
+    // Show confirm password field only on signup
+    document.getElementById('confirmField').style.display = isLogin ? 'none' : 'block';
+    document.getElementById('authBtn').textContent = isLogin ? 'Log in' : 'Create account';
+    document.getElementById('authMsg').textContent = '';
   }
 
-  function loadData() {
-    // Load JSON string from browser storage and convert back to JS object
-    const raw = localStorage.getItem('flashcard_app');
-    // If nothing saved yet, return a default empty structure
-    return raw ? JSON.parse(raw) : { topics: [] };
+  async function handleAuth() {
+    const username = document.getElementById('authUsername').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const confirm  = document.getElementById('authConfirm').value;
+    const btn = document.getElementById('authBtn');
+
+    if (!username || !password) return showAuthMsg('Please fill in all fields', 'error');
+    if (currentTab === 'signup' && password !== confirm) return showAuthMsg('Passwords do not match', 'error');
+    if (currentTab === 'signup' && password.length < 6) return showAuthMsg('Password must be at least 6 characters', 'error');
+
+    btn.disabled = true;
+    btn.textContent = currentTab === 'login' ? 'Logging in...' : 'Creating account...';
+
+    // Supabase auth requires an email — we build a fake one from the username
+    // The user never sees this email, they only ever type their username
+    const fakeEmail = username.toLowerCase() + '@flashcard.app';
+
+    if (currentTab === 'signup') {
+      const { error } = await db.auth.signUp({ email: fakeEmail, password });
+      if (error) {
+        showAuthMsg(error.message.includes('already registered') ? 'Username already taken' : error.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Create account';
+        return;
+      }
+      showAuthMsg('Account created! Logging you in...', 'success');
+    }
+
+    // Sign in — works for both new signup and returning login
+    const { data, error } = await db.auth.signInWithPassword({ email: fakeEmail, password });
+    if (error) {
+      showAuthMsg('Wrong username or password', 'error');
+    } else {
+      enterApp(data.user, username);
+    }
+
+    btn.disabled = false;
+    btn.textContent = currentTab === 'login' ? 'Log in' : 'Create account';
   }
 
-  // ── App state ───────────────────────────────────
-  let data = loadData();         // all topics and cards loaded from storage
-  let activeTopic = null;        // which topic is currently selected
-  let studyIndex = 0;            // which card we're on in study mode
+  function showAuthMsg(text, type) {
+    const el = document.getElementById('authMsg');
+    el.textContent = text;
+    el.className = 'auth-msg ' + type;
+  }
 
-  // ── Topic functions ─────────────────────────────
+  function enterApp(user, username) {
+    currentUser = user;
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('appScreen').classList.add('visible');
+    document.getElementById('userDisplay').textContent = username;
+    loadTopics();
+  }
 
-  function addTopic() {
+  async function logout() {
+    await db.auth.signOut(); // ends the Supabase session
+    currentUser = null; topics = []; activeTopic = null; activeCards = [];
+    document.getElementById('appScreen').classList.remove('visible');
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('authUsername').value = '';
+    document.getElementById('authPassword').value = '';
+    document.getElementById('authConfirm').value  = '';
+    showAuthMsg('', '');
+  }
+
+  // ── Topics ───────────────────────────────────────
+
+  async function loadTopics() {
+    document.getElementById('topicList').innerHTML =
+      '<div style="padding:16px 12px;font-size:12px;color:var(--muted)">Loading...</div>';
+    // Fetch from Supabase — RLS automatically filters to this user's rows only
+    const { data, error } = await db.from('topics').select('*').order('created_at');
+    if (!error) { topics = data; renderTopics(); renderCards(); }
+  }
+
+  async function addTopic() {
     const input = document.getElementById('newTopicInput');
     const name = input.value.trim();
-    if (!name) return; // do nothing if input is empty
-
-    // Create a new topic object with a unique ID and empty cards array
-    const topic = { id: Date.now().toString(), name, cards: [] };
-    data.topics.push(topic);
-    saveData(data); // persist to localStorage immediately
-
-    input.value = ''; // clear the input
-    renderTopics();
-    selectTopic(topic.id); // auto-select the new topic
+    if (!name) return;
+    // Insert a new row into the topics table in Supabase
+    const { data, error } = await db.from('topics')
+      .insert({ name, user_id: currentUser.id })
+      .select().single();
+    if (!error) {
+      topics.push(data);
+      input.value = '';
+      renderTopics();
+      selectTopic(data.id);
+    }
   }
 
-  function deleteTopic(id, e) {
-    e.stopPropagation(); // prevent topic selection when clicking delete
+  async function deleteTopic(id, e) {
+    e.stopPropagation();
     if (!confirm('Delete this topic and all its cards?')) return;
-    data.topics = data.topics.filter(t => t.id !== id);
-    saveData(data);
-    if (activeTopic === id) activeTopic = null;
-    renderTopics();
-    renderCards();
+    // Delete from Supabase — "on delete cascade" in SQL removes all child cards too
+    await db.from('topics').delete().eq('id', id);
+    topics = topics.filter(t => t.id !== id);
+    if (activeTopic === id) { activeTopic = null; activeCards = []; }
+    renderTopics(); renderCards();
   }
 
   function selectTopic(id) {
     activeTopic = id;
-    renderTopics();  // re-render to update the active highlight
-    renderCards();   // show this topic's cards
+    renderTopics();
+    loadCards(id);
   }
 
   function renderTopics() {
     const list = document.getElementById('topicList');
-
-    if (data.topics.length === 0) {
-      // Show helpful empty message if no topics exist yet
+    if (topics.length === 0) {
       list.innerHTML = '<div style="padding:16px 12px;font-size:12px;color:var(--muted);line-height:1.6">No topics yet.<br/>Type a name above and press +</div>';
       return;
     }
-
-    // Build one list item per topic
-    list.innerHTML = data.topics.map(t => `
+    list.innerHTML = topics.map(t => `
       <div class="topic-item ${t.id === activeTopic ? 'active' : ''}" onclick="selectTopic('${t.id}')">
         <span class="topic-name">${t.name}</span>
-        <span class="topic-count">${t.cards.length}</span>
-        <button class="topic-delete" onclick="deleteTopic('${t.id}', event)" title="Delete topic">✕</button>
+        <span class="topic-count" id="count-${t.id}">—</span>
+        <button class="topic-delete" onclick="deleteTopic('${t.id}',event)">✕</button>
       </div>
     `).join('');
   }
 
-  // ── Card functions ──────────────────────────────
+  // ── Cards ────────────────────────────────────────
 
-  function addCard() {
-    const front = document.getElementById('frontInput').value.trim();
-    const back  = document.getElementById('backInput').value.trim();
-    if (!front || !back) return; // both sides required
-
-    // Find the active topic and push a new card into it
-    const topic = data.topics.find(t => t.id === activeTopic);
-    topic.cards.push({ id: Date.now().toString(), front, back });
-    saveData(data);
-
-    // Clear the inputs
-    document.getElementById('frontInput').value = '';
-    document.getElementById('backInput').value = '';
-
-    renderTopics(); // update card count badge in sidebar
-    renderCards();  // refresh the grid
+  async function loadCards(topicId) {
+    document.getElementById('cardsArea').innerHTML = '<div class="loading">Loading cards...</div>';
+    // Fetch cards for this specific topic from Supabase
+    const { data, error } = await db.from('cards')
+      .select('*').eq('topic_id', topicId).order('created_at');
+    if (!error) {
+      activeCards = data;
+      const el = document.getElementById('count-' + topicId);
+      if (el) el.textContent = data.length;
+      renderCards();
+    }
   }
 
-  function deleteCard(topicId, cardId, e) {
-    e.stopPropagation(); // prevent card flip when clicking delete
-    const topic = data.topics.find(t => t.id === topicId);
-    topic.cards = topic.cards.filter(c => c.id !== cardId);
-    saveData(data);
-    renderTopics();
+  async function addCard() {
+    const front = document.getElementById('frontInput').value.trim();
+    const back  = document.getElementById('backInput').value.trim();
+    if (!front || !back) return;
+    const btn = document.getElementById('addCardBtn');
+    btn.disabled = true;
+    // Insert new card into Supabase linked to this topic and user
+    const { data, error } = await db.from('cards')
+      .insert({ front, back, topic_id: activeTopic, user_id: currentUser.id })
+      .select().single();
+    if (!error) {
+      activeCards.push(data);
+      document.getElementById('frontInput').value = '';
+      document.getElementById('backInput').value  = '';
+      const el = document.getElementById('count-' + activeTopic);
+      if (el) el.textContent = activeCards.length;
+      renderCards();
+    }
+    btn.disabled = false;
+  }
+
+  async function deleteCard(cardId, e) {
+    e.stopPropagation();
+    await db.from('cards').delete().eq('id', cardId);
+    activeCards = activeCards.filter(c => c.id !== cardId);
+    const el = document.getElementById('count-' + activeTopic);
+    if (el) el.textContent = activeCards.length;
     renderCards();
   }
 
   function flipCard(cardId) {
-    // Toggle the "flipped" class to trigger the CSS 3D rotation
     document.getElementById('card-' + cardId).classList.toggle('flipped');
   }
 
   function renderCards() {
-    const area  = document.getElementById('cardsArea');
-    const title = document.getElementById('topicTitle');
-    const sub   = document.getElementById('topicSubtitle');
-    const btn   = document.getElementById('studyBtn');
+    const area     = document.getElementById('cardsArea');
+    const title    = document.getElementById('topicTitle');
+    const subtitle = document.getElementById('topicSubtitle');
+    const btn      = document.getElementById('studyBtn');
 
-    // No topic selected — show default state
     if (!activeTopic) {
       title.textContent = 'Select a topic';
-      sub.textContent   = 'Pick a topic from the sidebar to get started';
-      btn.disabled      = true;
-      area.innerHTML    = `<div class="no-topic"><div class="no-topic-icon">📂</div><p>Create a topic on the left to start adding flashcards</p></div>`;
+      subtitle.textContent = 'Pick a topic from the sidebar';
+      btn.disabled = true;
+      area.innerHTML = `<div class="no-topic"><div class="no-topic-icon">📂</div><p>Create a topic on the left to start adding flashcards</p></div>`;
       return;
     }
 
-    const topic = data.topics.find(t => t.id === activeTopic);
-    title.textContent = topic.name;
-    sub.textContent   = `${topic.cards.length} card${topic.cards.length !== 1 ? 's' : ''}`;
-    btn.disabled      = topic.cards.length === 0;
+    const topic = topics.find(t => t.id === activeTopic);
+    title.textContent    = topic.name;
+    subtitle.textContent = `${activeCards.length} card${activeCards.length !== 1 ? 's' : ''}`;
+    btn.disabled = activeCards.length === 0;
 
-    // Build the add-card form + card grid
     area.innerHTML = `
-      <!-- Add card form -->
       <div class="add-card-form">
         <h4>Add a card</h4>
-        <div class="form-labels">
-          <span>Front (question)</span>
-          <span>Back (answer)</span>
-        </div>
+        <div class="form-labels"><span>Front (question)</span><span>Back (answer)</span></div>
         <div class="form-row">
           <textarea id="frontInput" placeholder="Type your question or term..."></textarea>
           <textarea id="backInput"  placeholder="Type the answer or definition..."></textarea>
         </div>
-        <button class="btn-add-card" onclick="addCard()">Add card</button>
+        <button class="btn-add-card" id="addCardBtn" onclick="addCard()">Add card</button>
       </div>
-
-      <!-- Card grid or empty state -->
-      ${topic.cards.length === 0
-        ? `<div class="empty-state">
-             <div class="empty-icon">🃏</div>
-             <h3>No cards yet</h3>
-             <p>Use the form above to add your first card to <strong>${topic.name}</strong></p>
-           </div>`
-        : `<div class="cards-grid">
-             ${topic.cards.map(c => `
-               <div class="card-wrap" id="card-${c.id}" onclick="flipCard('${c.id}')">
-                 <div class="card-inner">
-                   <div class="card-face">
-                     <div class="card-label">Question</div>
-                     <div class="card-text">${c.front}</div>
-                     <div class="card-hint">Click to flip</div>
-                   </div>
-                   <div class="card-face card-back">
-                     <div class="card-label">Answer</div>
-                     <div class="card-text">${c.back}</div>
-                     <div class="card-footer">
-                       <button class="btn-delete-card" onclick="deleteCard('${activeTopic}','${c.id}',event)">Delete</button>
-                     </div>
-                   </div>
-                 </div>
-               </div>
-             `).join('')}
-           </div>`
-      }
-    `;
+      ${activeCards.length === 0
+        ? `<div class="empty-state"><div class="empty-icon">🃏</div><h3>No cards yet</h3><p>Use the form above to add your first card to <strong>${topic.name}</strong></p></div>`
+        : `<div class="cards-grid">${activeCards.map(c => `
+            <div class="card-wrap" id="card-${c.id}" onclick="flipCard('${c.id}')">
+              <div class="card-inner">
+                <div class="card-face">
+                  <div class="card-label">Question</div>
+                  <div class="card-text">${c.front}</div>
+                  <div class="card-hint">Click to flip</div>
+                </div>
+                <div class="card-face card-back">
+                  <div class="card-label">Answer</div>
+                  <div class="card-text">${c.back}</div>
+                  <div class="card-footer">
+                    <button class="btn-delete-card" onclick="deleteCard('${c.id}',event)">Delete</button>
+                  </div>
+                </div>
+              </div>
+            </div>`).join('')}
+          </div>`
+      }`;
   }
 
-  // ── Study mode ──────────────────────────────────
+  // ── Study mode ───────────────────────────────────
 
   function openStudy() {
-    const topic = data.topics.find(t => t.id === activeTopic);
-    if (!topic || topic.cards.length === 0) return;
-    studyIndex = 0;
-    renderStudyCard();
+    if (!activeTopic || activeCards.length === 0) return;
+    studyIndex = 0; renderStudyCard();
     document.getElementById('studyOverlay').classList.add('open');
   }
-
-  function closeStudy() {
-    document.getElementById('studyOverlay').classList.remove('open');
-  }
+  function closeStudy() { document.getElementById('studyOverlay').classList.remove('open'); }
 
   function renderStudyCard() {
-    const topic = data.topics.find(t => t.id === activeTopic);
-    const card  = topic.cards[studyIndex];
-
-    // Update progress label
-    document.getElementById('studyProgress').textContent = `Card ${studyIndex + 1} of ${topic.cards.length}`;
-
-    // Set card text
+    const card = activeCards[studyIndex];
+    document.getElementById('studyProgress').textContent = `Card ${studyIndex + 1} of ${activeCards.length}`;
     document.getElementById('studyFrontText').textContent = card.front;
     document.getElementById('studyBackText').textContent  = card.back;
-
-    // Reset flip so every new card starts showing the front
     document.getElementById('studyCardWrap').classList.remove('flipped');
-
-    // Disable prev/next buttons at the edges
     document.getElementById('prevBtn').disabled = studyIndex === 0;
-    document.getElementById('nextBtn').disabled = studyIndex === topic.cards.length - 1;
+    document.getElementById('nextBtn').disabled = studyIndex === activeCards.length - 1;
   }
 
-  function flipStudyCard() {
-    document.getElementById('studyCardWrap').classList.toggle('flipped');
-  }
-
+  function flipStudyCard() { document.getElementById('studyCardWrap').classList.toggle('flipped'); }
   function prevCard() { if (studyIndex > 0) { studyIndex--; renderStudyCard(); } }
-  function nextCard() {
-    const topic = data.topics.find(t => t.id === activeTopic);
-    if (studyIndex < topic.cards.length - 1) { studyIndex++; renderStudyCard(); }
-  }
+  function nextCard() { if (studyIndex < activeCards.length - 1) { studyIndex++; renderStudyCard(); } }
 
-  // ── Keyboard shortcuts ──────────────────────────
+  // Keyboard shortcuts in study mode
   document.addEventListener('keydown', e => {
-    const overlay = document.getElementById('studyOverlay');
-    if (!overlay.classList.contains('open')) return;
-
-    if (e.key === 'ArrowRight') nextCard();       // next card
-    if (e.key === 'ArrowLeft')  prevCard();       // prev card
-    if (e.key === ' ') { e.preventDefault(); flipStudyCard(); } // spacebar to flip
-    if (e.key === 'Escape') closeStudy();         // close study mode
+    if (!document.getElementById('studyOverlay').classList.contains('open')) return;
+    if (e.key === 'ArrowRight') nextCard();
+    if (e.key === 'ArrowLeft')  prevCard();
+    if (e.key === ' ') { e.preventDefault(); flipStudyCard(); }
+    if (e.key === 'Escape') closeStudy();
   });
 
-  // Allow pressing Enter in the new topic input to add a topic
   document.getElementById('newTopicInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') addTopic();
   });
 
-  // ── Init ─────────────────────────────────────────
-  renderTopics(); // draw the sidebar on page load
-  renderCards();  // draw the main area on page load
+  ['authUsername','authPassword','authConfirm'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') handleAuth();
+    });
+  });
+
+  // On page load — check if user already has an active session
+  // If yes, skip the login screen entirely
+  db.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      const username = session.user.email.split('@')[0];
+      enterApp(session.user, username);
+    }
+  });
 </script>
 </body>
 </html>
