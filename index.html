@@ -85,6 +85,92 @@
     .btn-add-card { padding:9px 20px; background:var(--ink); color:#fff; border:none; border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; font-weight:500; cursor:pointer; transition:opacity 0.15s; }
     .btn-add-card:hover { opacity:0.8; }
     .btn-add-card:disabled { opacity:0.5; cursor:not-allowed; }
+
+    /* Trigger button — sits in the card area, opens the drawer */
+    .btn-open-drawer {
+      display:flex; align-items:center; gap:8px;
+      padding:10px 18px; background:var(--surface);
+      border:1px dashed var(--border); border-radius:10px;
+      font-family:'Inter',sans-serif; font-size:13px; font-weight:500;
+      color:var(--muted); cursor:pointer; margin-bottom:24px;
+      transition:border-color 0.15s, color 0.15s;
+    }
+    .btn-open-drawer:hover { border-color:var(--accent); color:var(--accent); }
+    .btn-open-drawer span { font-size:18px; line-height:1; }
+
+    /* Drawer overlay — dark background behind the drawer */
+    .drawer-overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,0.25); z-index:200;
+      backdrop-filter:blur(2px);
+    }
+    .drawer-overlay.open { display:block; }
+
+    /* Drawer panel — slides in from the right */
+    .drawer {
+      position:fixed; top:0; right:0; bottom:0;
+      width:min(480px, 100vw);
+      background:var(--surface);
+      border-left:1px solid var(--border);
+      box-shadow:-8px 0 40px rgba(0,0,0,0.1);
+      z-index:201;
+      display:flex; flex-direction:column;
+      /* Start off-screen to the right */
+      transform:translateX(100%);
+      transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+    /* Slide in when open class added */
+    .drawer.open { transform:translateX(0); }
+
+    .drawer-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:20px 24px; border-bottom:1px solid var(--border);
+    }
+    .drawer-title { font-family:'Lora',serif; font-size:18px; font-weight:500; }
+    .btn-close-drawer {
+      width:32px; height:32px; border:none; background:var(--bg);
+      border-radius:8px; font-size:18px; color:var(--muted);
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      transition:background 0.15s, color 0.15s;
+    }
+    .btn-close-drawer:hover { background:var(--border); color:var(--ink); }
+
+    .drawer-body { flex:1; padding:24px; display:flex; flex-direction:column; gap:20px; overflow-y:auto; }
+
+    .drawer-field label {
+      display:block; font-size:11px; font-weight:600;
+      letter-spacing:0.08em; text-transform:uppercase;
+      color:var(--muted); margin-bottom:8px;
+    }
+    .drawer-field textarea {
+      width:100%; padding:12px 14px;
+      border:1px solid var(--border); border-radius:10px;
+      font-family:'Inter',sans-serif; font-size:14px; color:var(--ink);
+      background:var(--bg); resize:vertical; min-height:100px;
+      outline:none; transition:border-color 0.15s; line-height:1.6;
+    }
+    .drawer-field textarea:focus { border-color:var(--accent); }
+    .drawer-field textarea::placeholder { color:var(--muted); }
+
+    .drawer-footer {
+      padding:16px 24px; border-top:1px solid var(--border);
+      display:flex; gap:10px;
+    }
+    .btn-drawer-save {
+      flex:1; padding:12px; background:var(--accent); color:#fff;
+      border:none; border-radius:10px;
+      font-family:'Inter',sans-serif; font-size:14px; font-weight:600;
+      cursor:pointer; transition:opacity 0.15s;
+    }
+    .btn-drawer-save:hover { opacity:0.88; }
+    .btn-drawer-save:disabled { opacity:0.5; cursor:not-allowed; }
+    .btn-drawer-cancel {
+      padding:12px 20px; background:none;
+      border:1px solid var(--border); border-radius:10px;
+      font-family:'Inter',sans-serif; font-size:14px; font-weight:500;
+      color:var(--muted); cursor:pointer; transition:background 0.15s;
+    }
+    .btn-drawer-cancel:hover { background:var(--bg); }
     .cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
     .card-wrap { perspective:1000px; height:160px; cursor:pointer; }
     .card-inner { position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform 0.45s cubic-bezier(0.4,0,0.2,1); }
@@ -180,6 +266,29 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- ADD CARD DRAWER — slides in from the right -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="addCardDrawer">
+  <div class="drawer-header">
+    <div class="drawer-title">Add a card</div>
+    <button class="btn-close-drawer" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-field">
+      <label>Front — Question or term</label>
+      <textarea id="frontInput" placeholder="e.g. What is photosynthesis?" rows="4"></textarea>
+    </div>
+    <div class="drawer-field">
+      <label>Back — Answer or definition</label>
+      <textarea id="backInput" placeholder="e.g. The process by which plants convert sunlight into energy..." rows="4"></textarea>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn-drawer-cancel" onclick="closeDrawer()">Cancel</button>
+    <button class="btn-drawer-save" id="addCardBtn" onclick="addCard()">Save card</button>
+  </div>
 </div>
 
 <!-- STUDY MODE OVERLAY -->
@@ -300,6 +409,19 @@
     showAuthMsg('', '');
   }
 
+  // ── Drawer (add card panel) ──────────────────────
+  function openDrawer() {
+    document.getElementById('addCardDrawer').classList.add('open');
+    document.getElementById('drawerOverlay').classList.add('open');
+    // Focus the front textarea so user can type right away
+    setTimeout(() => document.getElementById('frontInput').focus(), 320);
+  }
+
+  function closeDrawer() {
+    document.getElementById('addCardDrawer').classList.remove('open');
+    document.getElementById('drawerOverlay').classList.remove('open');
+  }
+
   // ── Topics ───────────────────────────────────────
 
   async function loadTopics() {
@@ -388,6 +510,7 @@
       document.getElementById('backInput').value  = '';
       const el = document.getElementById('count-' + activeTopic);
       if (el) el.textContent = activeCards.length;
+      closeDrawer(); // slide the drawer back in after saving
       renderCards();
     }
     btn.disabled = false;
@@ -426,15 +549,9 @@
     btn.disabled = activeCards.length === 0;
 
     area.innerHTML = `
-      <div class="add-card-form">
-        <h4>Add a card</h4>
-        <div class="form-labels"><span>Front (question)</span><span>Back (answer)</span></div>
-        <div class="form-row">
-          <textarea id="frontInput" placeholder="Type your question or term..."></textarea>
-          <textarea id="backInput"  placeholder="Type the answer or definition..."></textarea>
-        </div>
-        <button class="btn-add-card" id="addCardBtn" onclick="addCard()">Add card</button>
-      </div>
+      <button class="btn-open-drawer" onclick="openDrawer()">
+        <span>＋</span> Add a card
+      </button>
       ${activeCards.length === 0
         ? `<div class="empty-state"><div class="empty-icon">🃏</div><h3>No cards yet</h3><p>Use the form above to add your first card to <strong>${topic.name}</strong></p></div>`
         : `<div class="cards-grid">${activeCards.map(c => `
@@ -483,6 +600,10 @@
 
   // Keyboard shortcuts in study mode
   document.addEventListener('keydown', e => {
+    // Close drawer with Escape if it's open
+    if (e.key === 'Escape' && document.getElementById('addCardDrawer').classList.contains('open')) {
+      closeDrawer(); return;
+    }
     if (!document.getElementById('studyOverlay').classList.contains('open')) return;
     if (e.key === 'ArrowRight') nextCard();
     if (e.key === 'ArrowLeft')  prevCard();
